@@ -54,6 +54,7 @@
     <Compile Include="Assign.cs" />
     <Compile Include="Character.cs" />
     <Compile Include="Controller.cs" />
+    <Compile Include="KeyInfo.cs" />
     <Compile Include="KeysExtension.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

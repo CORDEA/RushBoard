@@ -1,98 +1,179 @@
 ﻿using Corale.Colore.Core;
 using Corale.Colore.Razer.Keyboard;
+using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
-using System.Windows.Forms;
 
 namespace RushBoard
 {
     class Controller
     {
-
-        private const int AnimationDelay = 20;
+        private const int AnimationDelay = 50;
 
         private Color Color { get; }
 
         private Color BaseColor { get; }
 
-        private Queue<Keys> Buffer { get; } = new Queue<Keys>();
+        private Queue<KeyInfo> Buffer { get; } = new Queue<KeyInfo>();
 
-        private bool IsAnimating { get; set; } = false;
+        private bool IsAnimating { get; set; }
+
+        private KeyInfo CurrentKeyInfo { get; set; }
+
+        private int[][] DisplayMatrix { get; }
+
+        private Key?[][] KeyboardMatrix { get; }
+
+        private bool IsAllClear
+        {
+            get
+            {
+                foreach (var item in DisplayMatrix)
+                {
+                    foreach (var it in item)
+                    {
+                        if (it == 1)
+                        {
+                            return false;
+                        }
+                    }
+                }
+                return true;
+            }
+        }
 
         public Controller(Color baseColor, Color color)
         {
             BaseColor = baseColor;
             Color = color;
 
+            DisplayMatrix =
+                Enumerable
+                    .Range(0, KeyInfo.BaseHeight)
+                    .Select(item =>
+                        Enumerable
+                            .Range(0, Assign.Row1.Length)
+                            .Select(it => 0)
+                            .ToArray())
+                    .ToArray();
+
+            KeyboardMatrix =
+                Enumerable
+                    .Range(0, KeyInfo.BaseHeight)
+                    .Select(item => Enumerable
+                        .Range(0, Assign.Row1.Length)
+                        .Select(it => GetKey(item, it))
+                        .ToArray())
+                    .ToArray();
+
             Keyboard.Instance.SetAll(baseColor);
         }
 
-        public async Task RequestAnimation(Keys key)
+        public async Task RequestAnimation(KeyInfo key)
         {
-            if (IsAnimating)
+            Buffer.Enqueue(key);
+            if (!IsAnimating)
             {
-                Buffer.Enqueue(key);
-                return;
-            }
-            IsAnimating = true;
-            await StartAnimation(key);
-            IsAnimating = false;
-            if (Buffer.Count > 0)
-            {
-                await RequestAnimation(Buffer.Dequeue());
+                await StartAnimation();
             }
         }
 
-        public async Task StartAnimation(Keys key)
+        private async Task StartAnimation()
         {
-            var keys = Assign.Row1;
-            for (var i = 0; i < keys.Length; i++)
+            IsAnimating = true;
+            while (true)
             {
-                Draw(key.ToDot(), i + 4);
+                Next();
+                Draw();
+                if (Buffer.Count == 0 && CurrentKeyInfo == null && IsAllClear)
+                {
+                    break;
+                }
                 await Task.Delay(AnimationDelay);
             }
+            IsAnimating = false;
         }
 
-        public void Draw(int[] charArr, int index)
+        private void Draw()
         {
-            var matrix = new Key?[]
-            {
-                GetKey(1, index), GetKey(1, index - 1), GetKey(1, index - 2), GetKey(1, index - 3),
-                GetKey(2, index), GetKey(2, index - 1), GetKey(2, index - 2), GetKey(2, index - 3),
-                GetKey(3, index), GetKey(3, index - 1), GetKey(3, index - 2), GetKey(3, index - 3),
-                GetKey(4, index), GetKey(4, index - 1), GetKey(4, index - 2), GetKey(4, index - 3),
-            };
-
             var instance = Keyboard.Instance;
-            instance.SetAll(BaseColor);
-            for (var i = 0; i < 16; i++)
+
+            for (var i = 0; i < KeyboardMatrix.Length; i++)
             {
-                var key = matrix[i];
-                if (!key.HasValue)
+                for (var j = 0; j < KeyboardMatrix[i].Length; j++)
                 {
-                    continue;
+                    var key = KeyboardMatrix[i][j];
+                    if (!key.HasValue)
+                    {
+                        continue;
+                    }
+                    var c = DisplayMatrix[i][j];
+                    if (c == 1)
+                    {
+                        instance.SetKey(key.Value, Color);
+                        continue;
+                    }
+                    instance.SetKey(key.Value, BaseColor);
                 }
-                if (charArr[i] == 1)
-                {
-                    instance.SetKey(key.Value, Color);
-                    continue;
-                }
-                instance.SetKey(key.Value, BaseColor);
             }
         }
 
-        public Key? GetKey(int row, int index)
+        private void Next()
+        {
+            for (var i = 0; i < DisplayMatrix.Length; i++)
+            {
+                DisplayMatrix[i] = Shift(DisplayMatrix[i]);
+            }
+
+            var length = DisplayMatrix[0].Length - 1;
+            if (CurrentKeyInfo != null)
+            {
+                var dot = CurrentKeyInfo.LineDot;
+                for (var i = 0; i < KeyInfo.BaseHeight; i++)
+                {
+                    DisplayMatrix[i][length] = dot[i];
+                }
+                if (!CurrentKeyInfo.Shift())
+                {
+                    CurrentKeyInfo = null;
+                }
+            }
+            else
+            {
+                if (Buffer.Count > 0)
+                {
+                    var info = Buffer.Dequeue();
+                    CurrentKeyInfo = info;
+                    var dot = CurrentKeyInfo.LineDot;
+                    for (var i = 0; i < KeyInfo.BaseHeight; i++)
+                    {
+                        DisplayMatrix[i][length] = dot[i];
+                    }
+                    CurrentKeyInfo.Shift();
+                }
+            }
+        }
+
+        private int[] Shift(int[] arr)
+        {
+            var newArr = new int[arr.Length];
+            Array.Copy(arr, 1, newArr, 0, arr.Length - 1);
+            return newArr;
+        }
+
+        private Key? GetKey(int row, int index)
         {
             var r = Assign.Row1;
             switch (row)
             {
-                case 2:
+                case 1:
                     r = Assign.Row2;
                     break;
-                case 3:
+                case 2:
                     r = Assign.Row3;
                     break;
-                case 4:
+                case 3:
                     r = Assign.Row4;
                     break;
             }

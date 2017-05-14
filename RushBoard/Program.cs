@@ -13,7 +13,7 @@ namespace RushBoard
 
         private const int KeyDown = 0x0100;
 
-        private static Controller Controller { get; } = new Controller(Color.Red, Color.Black);
+        private static Controller Controller { get; } = new Controller(Color.Red, Color.Blue);
 
         private static LowLevelKeyboardProc Proc { get; } = HookCallback;
 
@@ -46,7 +46,7 @@ namespace RushBoard
                 var code = Marshal.ReadInt32(lParam);
                 new Task(async () =>
                 {
-                    await Controller.RequestAnimation((Keys)code);
+                    await Controller.RequestAnimation(new KeyInfo((Keys)code));
                 }).RunSynchronously();
             }
             return CallNextHookEx(HookId, nCode, wParam, lParam);
